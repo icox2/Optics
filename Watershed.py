@@ -10,6 +10,8 @@ import argparse
 import imutils
 import cv2
 
+
+
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,
@@ -28,6 +30,7 @@ gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 0, 255,
 	cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 cv2.imshow("Thresh", thresh)
+
 
 # compute the exact Euclidean distance from every binary
 # pixel to the nearest zero pixel, then find peaks in this
