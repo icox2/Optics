@@ -53,7 +53,9 @@ if(filtercheck==0):
     gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
 
 elif(filtercheck==1):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray,(3,3),0)
+    gray = cv2.Laplacian(blur,cv2.CV_64F)
 
 
 else:
