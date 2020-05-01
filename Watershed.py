@@ -10,7 +10,7 @@ import cv2
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,	help="path to input image")
-ap.add_argument("-s","--size",default=.6, help="Fraction of original image size outputted")
+ap.add_argument("-s","--size", type=float, default=.6, help="Fraction of original image size outputted")
 args = vars(ap.parse_args())
 frac=args['size']
 # load the image and perform pyramid mean shift filtering
