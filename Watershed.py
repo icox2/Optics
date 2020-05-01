@@ -1,6 +1,3 @@
-#This program will be the 'overlay' that takes in the functions or programs 
-#that we write independently, and runs them, so we only have to run one file.
-
 # import the necessary packages
 from skimage.feature import peak_local_max
 from skimage.morphology import watershed
@@ -12,22 +9,26 @@ import cv2
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--image", required=True,
-	help="path to input image")
+ap.add_argument("-i", "--image", required=True,	help="path to input image")
+ap.add_argument("-s","--size",default=.6, help="Fraction of original image size outputted")
 args = vars(ap.parse_args())
-
+frac=args['size']
 # load the image and perform pyramid mean shift filtering
 # to aid the thresholding step
 image = cv2.imread(args["image"])
-shifted = cv2.pyrMeanShiftFiltering(image, 21, 51)
-cv2.imshow("Input", image)
+start = cv2.resize(image, (0, 0), None, frac, frac)
+#shifted = cv2.pyrMeanShiftFiltering(image, 21, 13)
+#shiftedmore = cv2.pyrMeanShiftFiltering(image, 21, 51)
+shifted = cv2.pyrMeanShiftFiltering(image, 21, 87)
+row1 = np.hstack((start, cv2.resize(shifted, (0, 0), None, frac, frac)))   
 
 # convert the mean shift image to grayscale, then apply
 # Otsu's thresholding
 gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 0, 255,
 	cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-cv2.imshow("Thresh", thresh)
+row2 = cv2.resize(cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR), (0, 0), None, frac, frac)
+
 
 # compute the exact Euclidean distance from every binary
 # pixel to the nearest zero pixel, then find peaks in this
@@ -36,11 +37,12 @@ D = ndimage.distance_transform_edt(thresh)
 localMax = peak_local_max(D, indices=False, min_distance=20,
 	labels=thresh)
 
+
 # perform a connected component analysis on the local peaks,
 # using 8-connectivity, then appy the Watershed algorithm
 markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
 labels = watershed(-D, markers, mask=thresh)
-print("[INFO] {} unique segments found".format(len(np.unique(labels)) - 1))
+print("[INFO] {} unique stars found".format(len(np.unique(labels)) - 1))
 
 # loop over the unique labels returned by the Watershed
 # algorithm
@@ -67,6 +69,12 @@ for label in np.unique(labels):
 	cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-# show the output image
-cv2.imshow("Output", image)
+# show the output images 
+row2 = np.hstack((row2,cv2.resize(image, (0, 0), None, frac, frac)))
+output = np.vstack((row1,row2))
+
+    
+    
+    
+cv2.imshow("Output", output)
 cv2.waitKey(0)
