@@ -11,15 +11,15 @@ import cv2
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,	help="path to input image")
 ap.add_argument("-s","--size", type=float, default=.6, help="Fraction of original image size outputted")
+ap.add_argument("--smoothing",nargs=2, type=int, default=[21,87], help="adjust the strength of the smoothing, default is 87")
 args = vars(ap.parse_args())
 frac=args['size']
+
 # load the image and perform pyramid mean shift filtering
 # to aid the thresholding step
 image = cv2.imread(args["image"])
 start = cv2.resize(image, (0, 0), None, frac, frac)
-#shifted = cv2.pyrMeanShiftFiltering(image, 21, 13)
-#shiftedmore = cv2.pyrMeanShiftFiltering(image, 21, 51)
-shifted = cv2.pyrMeanShiftFiltering(image, 21, 87)
+shifted = cv2.pyrMeanShiftFiltering(image, args['smoothing'][0], args['smoothing'][1])
 row1 = np.hstack((start, cv2.resize(shifted, (0, 0), None, frac, frac)))   
 
 # convert the mean shift image to grayscale, then apply
