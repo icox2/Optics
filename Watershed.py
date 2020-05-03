@@ -7,14 +7,19 @@ import argparse
 import imutils
 import cv2
 import sys
+import timeit
 
+#Starts a timer to measure run time
+start = timeit.default_timer()
 #Set up the arguments for giving image location and filtering parameters
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,	help="path to input image")
 ap.add_argument("-s","--size", type=float, default=1, help="Fraction of original image size outputted, default is 1")
-ap.add_argument("--smoothing",nargs=2, type=int, default=[13,50], help="adjust the strength of the smoothing, default is 13 50")
+ap.add_argument("--smoothing", nargs=2, type=int, default=[13,50], help="adjust the strength of the smoothing, default is 13 50")
 ap.add_argument("-p","--pass", type=int, default=0, help="set the high pass filter threshold")
 ap.add_argument("-f","--filter", type=str, default='pyr', help="set the type of filtering before the threshold used")
+ap.add_argument("-d","--distance", type=int, default=1, help="Set the minimum pixel distance between centers of stars. default is 1.")
+ap.add_argument("-o","--fulloutput", action='store_true', default=False, help="Display intermediary images after filtering and thresholding")
 args = vars(ap.parse_args())
 #This adjusts the scaling of the output image, since different images require different scaling
 frac=args['size'] 
@@ -59,16 +64,18 @@ if(highpass!=0):
             else:
                 m+=1
     print(f'masked {n} entries and left {m} untouched')
-#The next effect uses the name passed, so if the highpass isn't used
+#The next effect uses the variable name passed, so if the highpass isn't used sets passed to be the image
 else:
     passed = image
 
 
 #Filtercheck 0 is the value corresponding to the pyramid mean shift
 if(filtercheck==0):
-    #Apply the pyramid mean shift and then store the shifted image to be output at the end
+    #Apply the pyramid mean shift
     shifted = cv2.pyrMeanShiftFiltering(passed, args['smoothing'][0], args['smoothing'][1])
-    row1 = np.hstack((row1, cv2.resize(shifted, (0, 0), None, frac, frac)))     
+    #store the filtered image if using full output
+    if args['fulloutput']:
+        row1 = np.hstack((row1, cv2.resize(shifted, (0, 0), None, frac, frac)))     
     
 #Filtercheck 1 is the value for the laplacian of the Gaussian
 #This needs more work, since it doesn't work with the watershed, since it only highlights edges. 
@@ -81,8 +88,9 @@ elif(filtercheck==1):
     #Apply the Gaussian Blur, then take the laplcian of the blurred image
     blur = cv2.GaussianBlur(image,(kwide,khigh), 0)
     laplace = cv2.Laplacian(blur, -1)
-    #Store the image to be output at the end
-    row1 = np.hstack((row1, cv2.resize(laplace, (0, 0), None, frac, frac)))  
+    #store the filtered image if using full output
+    if args['fulloutput']:
+        row1 = np.hstack((row1, cv2.resize(laplace, (0, 0), None, frac, frac)))  
 
 #Failsafe else statement, incase filtercheck is not sucessfully set to a valid value
 else:
@@ -91,17 +99,17 @@ else:
     
 #Gray scale the image, then apply the Otsu Thresholding method
 gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-thresh = cv2.threshold(gray, 0, 255,
-	cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-#Store the thresholded image for final output
-row2 = cv2.resize(cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR), (0, 0), None, frac, frac)
+thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+#Store the thresholded image to be output if using full output
+if args['fulloutput']:
+    row2 = cv2.resize(cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR), (0, 0), None, frac, frac)
 
 
 #Create a euclidiean distance map of the thresholded image. This the value at each 
 #non-zero pixel the distance from the nearest 0 valued pixel
 D = ndimage.distance_transform_edt(thresh)
 #Find all the local maxes, which correspond to the centers of each star
-localMax = peak_local_max(D, indices=False, min_distance=5,
+localMax = peak_local_max(D, indices=False, min_distance=args["distance"],
 	labels=thresh)
 
 
@@ -111,7 +119,7 @@ markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
 #Perform a watershed on the negative of the distance function, using each local max
 #now local min as a source point for the 'water'
 labels = watershed(-D, markers, mask=thresh)
-print("{} unique stars found".format(len(np.unique(labels)) - 1))
+print(f"{len(np.unique(labels)) - 1} unique stars found")
 
 #Loop over each label found (All grouped pixels)
 for label in np.unique(labels):
@@ -124,20 +132,26 @@ for label in np.unique(labels):
 	mask[labels == label] = 255
     
 	#detect contours in the mask and grab the largest one
-	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-		cv2.CHAIN_APPROX_SIMPLE)
+	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	cnts = imutils.grab_contours(cnts)
 	c = max(cnts, key=cv2.contourArea)
     
 	#draw a circle enclosing the object
 	((x, y), r) = cv2.minEnclosingCircle(c)
 	cv2.circle(image, (int(x), int(y)), int(r), (0, 255, 0), 2)
-    #Possibly add numbers if selected
-	#cv2.putText(image, "#{}".format(label), (int(x) - 10, int(y)),
-	#	cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 255), 2)
 
-#show the output images 
-row2 = np.hstack((row2,cv2.resize(image, (0, 0), None, frac, frac)))
-output = np.vstack((row1,row2))    
+#Add the final marked image to the appropiate image structure
+if args['fulloutput']:
+    row2 = np.hstack((row2,cv2.resize(image, (0, 0), None, frac, frac)))
+    output = np.vstack((row1,row2))    
+else: 
+    output = np.hstack((row1,cv2.resize(image, (0, 0), None, frac, frac)))
+
+#Stop the timer and output the run time as well as the amount of pixels in the picture
+pixels = image.shape[0]*image.shape[1]
+stop = timeit.default_timer()
+print(f'Ran in {stop-start} seconds on an image with {pixels} pixels')
+
+#Display output image, regardless of which type of output being used
 cv2.imshow("Output", output)
 cv2.waitKey(0)
